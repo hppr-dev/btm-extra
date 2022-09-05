@@ -4,7 +4,11 @@ This is an example repository to hold external modules and drivers for bash task
 
 ## Usage
 
-1. Update the $TASK_MASTER_HOME/config.sh to include the raw text file of the inventory file
+1\. Update the $TASK_MASTER_HOME/config.sh
+```
+  TASK_REPOS="https://raw.github.usercontent.com/hppr-dev/btm-extra/main/inventory"
+```
+
 2. Run `task global module --enable MODULE_ID` to install enable the module ID
 
 ## Modules in this repo
