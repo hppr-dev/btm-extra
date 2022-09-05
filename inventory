@@ -1,0 +1,16 @@
+===== Directories =====
+
+MODULE_DIR = modules
+DRIVER_DIR = drivers
+
+
+
+===== Included Modules =====
+
+module-venv = venv-module.sh.disabled
+module-gonv = gonv-module.sh.disabled
+module-todo = todo-module.sh.disabled
+
+====== Included Drivers =====
+
+None Yet
