@@ -13,4 +13,4 @@ module-todo = todo-module.sh.disabled
 
 ====== Included Drivers =====
 
-None Yet
+driver-shellcheck = shellcheck_driver.sh
