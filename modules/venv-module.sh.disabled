@@ -16,6 +16,7 @@ arguments_venv() {
 }
 
 task_venv(){
+  touch "$STATE_DIR/venv.vars"
   if [[ -z "$ARG_TWO" ]]
   then
     ARG_THREE=T
@@ -47,7 +48,7 @@ task_venv(){
 
   elif [[ $TASK_SUBCOMMAND == "enable" ]]
   then
-    if [[ -z "$VENV_ACTIVE" ]] && [[ -d "$STATE_DIR/$ARG_UUID-$ARG_NAME" ]]
+    if [[ -z "$VENV_ACTIVE" ]] && [[ -d "$STATE_DIR/$ARG_NAME" ]]
     then
       hold_var "VIRTUAL_ENV"
       hold_var "PATH"
