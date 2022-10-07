@@ -2,50 +2,45 @@ arguments_venv() {
   SUBCOMMANDS='init|enable|disable|list|destroy'
 
   INIT_DESCRIPTION='Create a new python virtual environment'
-  INIT_OPTIONS='uuid:u:str name:n:str'
+  INIT_OPTIONS='name:n:str two:2:bool three:3:bool'
 
   ENABLE_DESCRIPTION='Enable a python virtual environment'
-  ENABLE_OPTIONS='uuid:u:str name:n:str'
+  ENABLE_OPTIONS='name:n:str'
 
   DISABLE_DESCRIPTION='Disable the current python virtual environment'
 
   LIST_DESCRIPTION='List available python virtual environments'
-  LIST_OPTIONS='uuid:u:str'
 
   DESTROY_DESCRIPTION='Destroy a python virtual environment'
-  DESTROY_OPTIONS='uuid:u:str name:n:str'
-
+  DESTROY_OPTIONS='name:n:str'
 }
 
 task_venv(){
-
+  if [[ -z "$ARG_TWO" ]]
+  then
+    ARG_THREE=T
+  fi
   if [[ -z "$ARG_NAME" ]]
   then
     ARG_NAME=venv
   fi
-  if [[ -z "$ARG_UUID" ]]
-  then
-    ARG_UUID=$LOCAL_TASKS_UUID
-  else
-    STATE_DIR="$TASK_MASTER_HOME/state/$ARG_UUID"
-    if [[ ! -d "$STATE_DIR" ]]
-    then
-      echo "State file directory doesn't exist"
-      return 1
-    fi
-  fi
-  if [[ -z "$LOCAL_TASKS_UUID" ]]
-  then
-    echo "Can't find a local task uuid"
-    return
-  fi
+  
   if [[ $TASK_SUBCOMMAND == "init" ]]
   then
     local env_name=VENV_${ARG_NAME//-/_}
     if [[ -z ${!env_name} ]]
     then
-      virtualenv $STATE_DIR/$ARG_UUID-$ARG_NAME
-      persist_var "$env_name" "$STATE_DIR/$ARG_UUID-$ARG_NAME"
+      if [[ -n "$ARG_TWO" ]]
+      then
+        virtualenv "$STATE_DIR/$ARG_NAME"
+      elif [[ -n "$ARG_THREE" ]]
+      then
+        python3 -m venv "$STATE_DIR/$ARG_NAME"
+      else
+        echo "Could not determine python version"
+        return
+      fi
+      persist_var "$env_name" "$STATE_DIR/$ARG_NAME"
     else
       echo "Can't initialize virtual environment, one already exists"
     fi
@@ -57,7 +52,7 @@ task_venv(){
       hold_var "VIRTUAL_ENV"
       hold_var "PATH"
       hold_var "PS1"
-      source $STATE_DIR/$ARG_UUID-$ARG_NAME/bin/activate
+      source $STATE_DIR/$ARG_NAME/bin/activate
       export_var "VIRTUAL_ENV" "$VIRTUAL_ENV"
       export_var "PATH" "$PATH"
       export_var "PS1" "$PS1"
@@ -85,11 +80,12 @@ task_venv(){
     local env_name=VENV_${ARG_NAME//-/_}
     if [[ ! -z "${!env_name}" ]]
     then
-      rm -r $STATE_DIR/$ARG_UUID-$ARG_NAME
+      rm -r $STATE_DIR/$ARG_NAME
       remove_var "$env_name"
     else
       echo "Can't destroy virtual environment: $ARG_NAME, does not exist"
     fi
+
   elif [[ $TASK_SUBCOMMAND == "list" ]]
   then
     sed 's/VENV_\(.*\)=.*/\1/' $STATE_FILE
