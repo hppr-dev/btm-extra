@@ -12,7 +12,7 @@ arguments_gonv() {
 
 task_gonv() {
   #See https://golang.org/dl/ for available versions/platforms
-  DEFAULT_VERSION=1.16
+  DEFAULT_VERSION=1.19
   DEFAULT_PLATFORM=linux-amd64
   case $TASK_SUBCOMMAND in
     "init")
@@ -34,15 +34,10 @@ task_gonv() {
 }
 
 gonv_check_name() {
-  if [[ -z "$ARG_NAME" ]] 
+  if [[ -z "$ARG_NAME" ]]
   then
-    ARG_NAME=$LOCAL_TASKS_UUID
-  fi
-  if [[ -z "$ARG_NAME" ]] 
-  then
-    echo "--name not supplied and could not determine local uuid. Either supply --name or move to a directory with a tasks.sh file"
-    exit 1
-  fi
+    ARG_NAME=$(basename $TASK_DIR)
+  fi  
   ENV_DIR=$STATE_DIR/gonv/$ARG_NAME
 }
 
@@ -69,7 +64,7 @@ gonv_init() {
   mkdir -p $ENV_DIR/modules
   cd $ENV_DIR
   GO_TAR=go$ARG_VERSION.$ARG_PLATFORM.tar.gz
-  wget https://golang.org/dl/$GO_TAR
+  curl -L -o "$GO_TAR" "https://golang.org/dl/$GO_TAR"
   tar -xf $GO_TAR
   rm $GO_TAR
 }
