@@ -14,6 +14,10 @@ task_gonv() {
   #See https://golang.org/dl/ for available versions/platforms
   DEFAULT_VERSION=1.19
   DEFAULT_PLATFORM=linux-amd64
+  ROOT_STATE_DIR=$TASK_MASTER_HOME/state/gonv
+  GONV_STATE_FILE=$TASK_MASTER_HOME/state/gonv.vars
+  GO_DOWNLOAD_CACHE=$ROOT_STATE_DIR/downloads
+  gonv_check_name
   case $TASK_SUBCOMMAND in
     "init")
     gonv_init
@@ -37,8 +41,8 @@ gonv_check_name() {
   if [[ -z "$ARG_NAME" ]]
   then
     ARG_NAME=$(basename $TASK_DIR)
-  fi  
-  ENV_DIR=$STATE_DIR/gonv/$ARG_NAME
+  fi
+  ENV_DIR=$ROOT_STATE_DIR/$ARG_NAME
 }
 
 gonv_check_active() {
@@ -50,27 +54,34 @@ gonv_check_active() {
 }
 
 gonv_init() {
-  gonv_check_name
   if [[ -z "$ARG_VERSION" ]]
   then
     ARG_VERSION=$DEFAULT_VERSION
   fi
+
   if [[ -z "$ARG_PLATFORM" ]]
   then
     ARG_PLATFORM=$DEFAULT_PLATFORM
   fi
 
   echo Initializing go $ARG_VERSION environment in $ENV_DIR
-  mkdir -p $ENV_DIR/modules
+  mkdir -p $ENV_DIR/modules $GO_DOWNLOAD_CACHE
   cd $ENV_DIR
+
   GO_TAR=go$ARG_VERSION.$ARG_PLATFORM.tar.gz
-  curl -L -o "$GO_TAR" "https://golang.org/dl/$GO_TAR"
+  if [[ ! -f "$GO_DOWNLOAD_CACHE/$GO_TAR" ]]
+  then
+    curl -L -o "$GO_DOWNLOAD_CACHE/$GO_TAR" "https://golang.org/dl/$GO_TAR"
+  fi
+
+  cp "$GO_DOWNLOAD_CACHE/$GO_TAR" .
   tar -xf $GO_TAR
   rm $GO_TAR
+
+  echo "GONV_$ARG_NAME=$ENV_DIR" >> "$GONV_STATE_FILE"
 }
 
 gonv_enable() {
-  gonv_check_name
   gonv_check_active
   echo Enabling go environment $ARG_NAME
   hold_var "PS1"
@@ -79,7 +90,7 @@ gonv_enable() {
   export_var "PS1" "(go-$ARG_NAME)-$PS1"
   export_var "GOPATH" "$ENV_DIR/modules"
   export_var "PATH" "$PATH:$ENV_DIR/go/bin:$ENV_DIR/modules/bin"
-  persist_var "GONV_ACTIVE" "T" 
+  persist_var "GONV_ACTIVE" "T"
   set_trap "cd $RUNNING_DIR; task gonv disable ;"
 }
 
@@ -99,7 +110,6 @@ gonv_disable() {
 }
 
 gonv_destroy() {
-  gonv_check_name
   gonv_check_active
   echo Destroying go environment
   if [[ -d "$ENV_DIR" ]]
@@ -107,6 +117,13 @@ gonv_destroy() {
    chmod -R +w $ENV_DIR/
    rm -r $ENV_DIR
   fi
+
+  awk "/^GONV_$ARG_NAME=/ { next } { print }" "$GONV_STATE_FILE" >> "$GONV_STATE_FILE.tmp"
+  mv "$GONV_STATE_FILE"{.tmp,}
+}
+
+gonv_list() {
+  sed 's/GONV_\(.*\)=.*/\1/' "$GONV_STATE_FILE"
 }
 
 
@@ -118,3 +135,4 @@ readonly -f gonv_init
 readonly -f gonv_enable
 readonly -f gonv_disable
 readonly -f gonv_destroy
+readonly -f gonv_list
