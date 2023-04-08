@@ -17,7 +17,7 @@ task_gonv() {
   ROOT_STATE_DIR=$TASK_MASTER_HOME/state/gonv
   GONV_STATE_FILE=$TASK_MASTER_HOME/state/gonv.vars
   GO_DOWNLOAD_CACHE=$ROOT_STATE_DIR/downloads
-  gonv_check_name
+  gonv_load_vars
   case $TASK_SUBCOMMAND in
     "init")
     gonv_init
@@ -37,16 +37,18 @@ task_gonv() {
   esac
 }
 
-gonv_check_name() {
+gonv_load_vars() {
   if [[ -z "$ARG_NAME" ]]
   then
     ARG_NAME=$(basename $TASK_DIR)
   fi
   ENV_DIR=$ROOT_STATE_DIR/$ARG_NAME
+  TTY=$(tty | tr -d '/' )
+  . "$GONV_STATE_FILE"
 }
 
 gonv_check_active() {
-  if [[ -n "$GONV_ACTIVE" ]]
+  if [[ "$GONV_ACTIVE" == "$TTY" ]]
   then
     echo "A go environment is already active. Cannot $TASK_SUBCOMMAND."
     exit 1
@@ -75,8 +77,8 @@ gonv_init() {
   fi
 
   cp "$GO_DOWNLOAD_CACHE/$GO_TAR" .
-  tar -xf $GO_TAR
-  rm $GO_TAR
+  tar -xf "$GO_TAR"
+  rm "$GO_TAR"
 
   echo "GONV_$ARG_NAME=$ENV_DIR" >> "$GONV_STATE_FILE"
 }
@@ -84,13 +86,13 @@ gonv_init() {
 gonv_enable() {
   gonv_check_active
   echo Enabling go environment $ARG_NAME
-  hold_var "PS1"
-  hold_var "PATH"
-  hold_var "GOPATH"
+  echo "PS1_$TTY=\"$PS1\"" >> "$GONV_STATE_FILE"
+  echo "PATH_$TTY=\"$PATH\"" >> "$GONV_STATE_FILE"
+  echo "GOPATH_$TTY=\"$GOPATH\"" >> "$GONV_STATE_FILE"
   export_var "PS1" "(go-$ARG_NAME)-$PS1"
   export_var "GOPATH" "$ENV_DIR/modules"
   export_var "PATH" "$PATH:$ENV_DIR/go/bin:$ENV_DIR/modules/bin"
-  persist_var "GONV_ACTIVE" "T"
+  echo "GONV_ACTIVE=$TTY" >> $GONV_STATE_FILE
   set_trap "cd $RUNNING_DIR; task gonv disable ;"
 }
 
@@ -98,11 +100,15 @@ gonv_disable() {
   if [[ -n "$GONV_ACTIVE" ]]
   then
     echo Disabling go environment
-    release_var "PS1"
-    release_var "PATH"
-    release_var "GOPATH"
+    val=PS1_$TTY
+    export_var "PS1" "${!val}"
+    val=PATH_$TTY
+    export_var "PATH" "${!val}"
+    val=GOPATH_$TTY
+    export_var "GOPATH" "${!val}"
     export GOPATH=$GOPATH
-    remove_var "GONV_ACTIVE"
+    awk "/^(PS1|PATH|GOPATH)_$TTY/ { next } /^GONV_ACTIVE=${TTY}$/ { next } { print }" "$GONV_STATE_FILE" > "$GONV_STATE_FILE.tmp"
+    mv "$GONV_STATE_FILE"{.tmp,}
     unset_trap
   else
     echo Go environment not active
@@ -123,13 +129,13 @@ gonv_destroy() {
 }
 
 gonv_list() {
-  sed 's/GONV_\(.*\)=.*/\1/' "$GONV_STATE_FILE"
+  grep "GONV_" "$GONV_STATE_FILE" | sed 's/GONV_\(.*\)=.*/\1/'
 }
 
 
 readonly -f arguments_gonv
 readonly -f task_gonv
-readonly -f gonv_check_name
+readonly -f gonv_load_vars
 readonly -f gonv_check_active
 readonly -f gonv_init
 readonly -f gonv_enable
