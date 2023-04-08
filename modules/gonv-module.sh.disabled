@@ -17,6 +17,7 @@ task_gonv() {
   ROOT_STATE_DIR=$TASK_MASTER_HOME/state/gonv
   GONV_STATE_FILE=$TASK_MASTER_HOME/state/gonv.vars
   GO_DOWNLOAD_CACHE=$ROOT_STATE_DIR/downloads
+
   gonv_load_vars
   case $TASK_SUBCOMMAND in
     "init")
@@ -38,10 +39,18 @@ task_gonv() {
 }
 
 gonv_load_vars() {
+  if [[ ! -f "$GONV_STATE_FILE" ]]
+  then
+    touch "$ROOT_STATE_FILE"
+    mkdir -p "$ROOT_STATE_DIR"
+  fi
+
   if [[ -z "$ARG_NAME" ]]
   then
     ARG_NAME=$(basename $TASK_DIR)
   fi
+  ARG_NAME=${ARG_NAME/-/_}
+
   ENV_DIR=$ROOT_STATE_DIR/$ARG_NAME
   TTY=$(tty | tr -d '/' )
   . "$GONV_STATE_FILE"
@@ -55,7 +64,23 @@ gonv_check_active() {
   fi
 }
 
+gonv_check_exists() {
+  val=GONV_$ARG_NAME
+  if [[ -z "${!val}" ]]
+  then
+    return 1
+  fi
+  return 0
+}
+
 gonv_init() {
+
+  if gonv_check_exists
+  then
+    echo gonv $ARG_NAME already exists. Did you mean enable?
+    exit 1
+  fi
+
   if [[ -z "$ARG_VERSION" ]]
   then
     ARG_VERSION=$DEFAULT_VERSION
@@ -66,33 +91,49 @@ gonv_init() {
     ARG_PLATFORM=$DEFAULT_PLATFORM
   fi
 
-  echo Initializing go $ARG_VERSION environment in $ENV_DIR
+  echo Initializing go $ARG_VERSION environment in $ENV_DIR...
   mkdir -p $ENV_DIR/modules $GO_DOWNLOAD_CACHE
   cd $ENV_DIR
 
+  echo Retrieving go assets...
   GO_TAR=go$ARG_VERSION.$ARG_PLATFORM.tar.gz
   if [[ ! -f "$GO_DOWNLOAD_CACHE/$GO_TAR" ]]
   then
+    echo go $ARG_VERSION not found locally. Downloading...
     curl -L -o "$GO_DOWNLOAD_CACHE/$GO_TAR" "https://golang.org/dl/$GO_TAR"
   fi
 
+  echo Extracting go assets...
   cp "$GO_DOWNLOAD_CACHE/$GO_TAR" .
   tar -xf "$GO_TAR"
   rm "$GO_TAR"
 
+  echo Saving gonv record...
   echo "GONV_$ARG_NAME=$ENV_DIR" >> "$GONV_STATE_FILE"
 }
 
 gonv_enable() {
+  if ! gonv_check_exists
+  then
+    echo gonv $ARG_NAME does not exist. Did you mean init?
+    exit 1
+  fi
+
   gonv_check_active
   echo Enabling go environment $ARG_NAME
+
+
+  _tmverbose_echo "Saving current env variables..."
   echo "PS1_$TTY=\"$PS1\"" >> "$GONV_STATE_FILE"
   echo "PATH_$TTY=\"$PATH\"" >> "$GONV_STATE_FILE"
   echo "GOPATH_$TTY=\"$GOPATH\"" >> "$GONV_STATE_FILE"
+
+  _tmverbose_echo "Updating env variables..."
   export_var "PS1" "(go-$ARG_NAME)-$PS1"
   export_var "GOPATH" "$ENV_DIR/modules"
   export_var "PATH" "$PATH:$ENV_DIR/go/bin:$ENV_DIR/modules/bin"
   echo "GONV_ACTIVE=$TTY" >> $GONV_STATE_FILE
+
   set_trap "cd $RUNNING_DIR; task gonv disable ;"
 }
 
@@ -100,15 +141,18 @@ gonv_disable() {
   if [[ -n "$GONV_ACTIVE" ]]
   then
     echo Disabling go environment
+    _tmverbose_echo "Removing saved env variables..."
+    awk "/^(PS1|PATH|GOPATH)_$TTY/ { next } /^GONV_ACTIVE=${TTY}$/ { next } { print }" "$GONV_STATE_FILE" > "$GONV_STATE_FILE.tmp"
+    mv "$GONV_STATE_FILE"{.tmp,}
+
+    _tmverbose_echo "Extracting saved env variables..."
     val=PS1_$TTY
     export_var "PS1" "${!val}"
     val=PATH_$TTY
     export_var "PATH" "${!val}"
     val=GOPATH_$TTY
     export_var "GOPATH" "${!val}"
-    export GOPATH=$GOPATH
-    awk "/^(PS1|PATH|GOPATH)_$TTY/ { next } /^GONV_ACTIVE=${TTY}$/ { next } { print }" "$GONV_STATE_FILE" > "$GONV_STATE_FILE.tmp"
-    mv "$GONV_STATE_FILE"{.tmp,}
+
     unset_trap
   else
     echo Go environment not active
@@ -116,14 +160,24 @@ gonv_disable() {
 }
 
 gonv_destroy() {
+
+  if ! gonv_check_exists
+  then
+    echo gonv $ARG_NAME does not exist.
+    exit 1
+  fi
+
   gonv_check_active
   echo Destroying go environment
+
+  echo Removing $ENV_DIR...
   if [[ -d "$ENV_DIR" ]]
   then
    chmod -R +w $ENV_DIR/
    rm -r $ENV_DIR
   fi
 
+  echo Removing gonv record...
   awk "/^GONV_$ARG_NAME=/ { next } { print }" "$GONV_STATE_FILE" >> "$GONV_STATE_FILE.tmp"
   mv "$GONV_STATE_FILE"{.tmp,}
 }
@@ -137,6 +191,7 @@ readonly -f arguments_gonv
 readonly -f task_gonv
 readonly -f gonv_load_vars
 readonly -f gonv_check_active
+readonly -f gonv_check_exists
 readonly -f gonv_init
 readonly -f gonv_enable
 readonly -f gonv_disable
