@@ -1,5 +1,5 @@
 arguments_gonv() {
-  SUBCOMMANDS="init|enable|disable|list|destroy"
+  SUBCOMMANDS="init|enable|disable|list|destroy|vs"
   INIT_DESCRIPTION="Initialize a new go environment"
   INIT_OPTIONS="version:v:str name:n:str platform:p:str"
   ENABLE_DESCRIPTION="Enable a go environment"
@@ -8,6 +8,8 @@ arguments_gonv() {
   DESTROY_DESCRIPTION="Remove go environment"
   DESTROY_OPTIONS="name:n:str"
   LIST_DESCRIPTION="List go environments"
+  VS_DESCRIPTION="Set vscode environment"
+  VS_REQUIREMENTS="name:n:str"
 }
 
 task_gonv() {
@@ -34,6 +36,9 @@ task_gonv() {
     ;;
     "list")
     gonv_list
+    ;;
+    "vs")
+    gonv_vs
     ;;
   esac
 }
@@ -186,6 +191,17 @@ gonv_list() {
   grep "GONV_" "$GONV_STATE_FILE" | sed 's/GONV_\(.*\)=.*/\1/'
 }
 
+gonv_vs() {
+  if gonv_check_exists
+  then
+    ln -sf "$ENV_DIR" "$TASK_MASTER_HOME/state/gonv/vscode"
+    echo "Set $ARG_NAME as $TASK_MASTER_HOME/state/gonv/vscode."
+  else
+    echo "gonv $ARG_NAME does not exist
+  fi
+}
+  
+
 
 readonly -f arguments_gonv
 readonly -f task_gonv
@@ -197,3 +213,4 @@ readonly -f gonv_enable
 readonly -f gonv_disable
 readonly -f gonv_destroy
 readonly -f gonv_list
+readonly -f gonv_vs
