@@ -197,7 +197,7 @@ gonv_vs() {
     ln -sf "$ENV_DIR" "$TASK_MASTER_HOME/state/gonv/vscode"
     echo "Set $ARG_NAME as $TASK_MASTER_HOME/state/gonv/vscode."
   else
-    echo "gonv $ARG_NAME does not exist
+    echo "gonv $ARG_NAME does not exist"
   fi
 }
   
