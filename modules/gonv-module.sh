@@ -17,7 +17,6 @@ task_gonv() {
   DEFAULT_VERSION=1.19
   DEFAULT_PLATFORM=linux-amd64
   ROOT_STATE_DIR=$TASK_MASTER_HOME/state/gonv
-  GONV_STATE_FILE=$TASK_MASTER_HOME/state/gonv.vars
   GO_DOWNLOAD_CACHE=$ROOT_STATE_DIR/downloads
 
   gonv_load_vars
@@ -44,25 +43,21 @@ task_gonv() {
 }
 
 gonv_load_vars() {
-  if [[ ! -f "$GONV_STATE_FILE" ]]
-  then
-    touch "$ROOT_STATE_FILE"
-    mkdir -p "$ROOT_STATE_DIR"
-  fi
-
   if [[ -z "$ARG_NAME" ]]
   then
-    ARG_NAME=$(basename $TASK_DIR)
+    ARG_NAME=$(basename "$TASK_DIR")
   fi
   ARG_NAME=${ARG_NAME/-/_}
 
   ENV_DIR=$ROOT_STATE_DIR/$ARG_NAME
   TTY=$(tty | tr -d '/' )
-  . "$GONV_STATE_FILE"
+
+  local_name=GONV_ACTIVE_$TTY
+  LOCAL_GONV_ACTIVE=${!local_name}
 }
 
 gonv_check_active() {
-  if [[ "$GONV_ACTIVE" == "$TTY" ]]
+  if [[ -n "$LOCAL_GONV_ACTIVE" ]]
   then
     echo "A go environment is already active. Cannot $TASK_SUBCOMMAND."
     exit 1
@@ -114,7 +109,7 @@ gonv_init() {
   rm "$GO_TAR"
 
   echo Saving gonv record...
-  echo "GONV_$ARG_NAME=$ENV_DIR" >> "$GONV_STATE_FILE"
+  persist_module_var "GONV_$ARG_NAME" "$ENV_DIR"
 }
 
 gonv_enable() {
@@ -129,34 +124,35 @@ gonv_enable() {
 
 
   _tmverbose_echo "Saving current env variables..."
-  echo "PS1_$TTY=\"$PS1\"" >> "$GONV_STATE_FILE"
-  echo "PATH_$TTY=\"$PATH\"" >> "$GONV_STATE_FILE"
-  echo "GOPATH_$TTY=\"$GOPATH\"" >> "$GONV_STATE_FILE"
+
+  eval "PS1_$TTY=$PS1"
+  eval "PATH_$TTY=$PATH"
+  eval "GOPATH_$TTY=$GOPATH"
+
+  hold_module_var "PS1_$TTY"
+  hold_module_var "PATH_$TTY"
+  hold_module_var "GOPATH_$TTY"
 
   _tmverbose_echo "Updating env variables..."
   export_var "PS1" "(go-$ARG_NAME)-$PS1"
   export_var "GOPATH" "$ENV_DIR/modules"
   export_var "PATH" "$PATH:$ENV_DIR/go/bin:$ENV_DIR/modules/bin"
-  echo "GONV_ACTIVE=$TTY" >> $GONV_STATE_FILE
+  persist_module_var "GONV_ACTIVE_$TTY" "TRUE"
 
   set_trap "cd $RUNNING_DIR; task gonv disable ;"
 }
 
 gonv_disable() {
-  if [[ -n "$GONV_ACTIVE" ]]
+  if [[ -n "$LOCAL_GONV_ACTIVE" ]]
   then
     echo Disabling go environment
     _tmverbose_echo "Removing saved env variables..."
-    awk "/^(PS1|PATH|GOPATH)_$TTY/ { next } /^GONV_ACTIVE=${TTY}$/ { next } { print }" "$GONV_STATE_FILE" > "$GONV_STATE_FILE.tmp"
-    mv "$GONV_STATE_FILE"{.tmp,}
+    remove_module_var "GONV_ACTIVE_$TTY"
 
     _tmverbose_echo "Extracting saved env variables..."
-    val=PS1_$TTY
-    export_var "PS1" "${!val}"
-    val=PATH_$TTY
-    export_var "PATH" "${!val}"
-    val=GOPATH_$TTY
-    export_var "GOPATH" "${!val}"
+    release_module_var "PS1_$TTY"
+    release_module_var "PATH_$TTY"
+    release_module_var "GOPATH_$TTY"
 
     unset_trap
   else
@@ -183,12 +179,11 @@ gonv_destroy() {
   fi
 
   echo Removing gonv record...
-  awk "/^GONV_$ARG_NAME=/ { next } { print }" "$GONV_STATE_FILE" >> "$GONV_STATE_FILE.tmp"
-  mv "$GONV_STATE_FILE"{.tmp,}
+  remove_module_var "GONV_$ARG_NAME"
 }
 
 gonv_list() {
-  grep "GONV_" "$GONV_STATE_FILE" | sed 's/GONV_\(.*\)=.*/\1/'
+  grep "GONV_" "$MODULE_STATE_FILE" | sed 's/GONV_\(.*\)=.*/\1/'
 }
 
 gonv_vs() {
