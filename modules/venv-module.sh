@@ -12,7 +12,6 @@ arguments_venv() {
 
 task_venv() {
   ROOT_STATE_DIR=$TASK_MASTER_HOME/state/venv
-  VENV_STATE_FILE=$TASK_MASTER_HOME/state/venv.vars
   venv_load_vars
   case $TASK_SUBCOMMAND in
     "init")
@@ -34,27 +33,21 @@ task_venv() {
 }
 
 venv_load_vars() {
-  if [[ ! -f "$VENV_STATE_FILE" ]]
-  then
-    echo No state file found. Initializing state files...
-    touch "$ROOT_STATE_FILE"
-    mkdir -p "$ROOT_STATE_DIR"
-  fi
-
   if [[ -z "$ARG_NAME" ]]
   then
-    ARG_NAME=$(basename $TASK_DIR)
+    ARG_NAME=$(basename "$TASK_DIR")
   fi
 
   ARG_NAME=${ARG_NAME//-/_}
   ENV_DIR=$ROOT_STATE_DIR/$ARG_NAME
 
   TTY=$( tty | tr -d '/' )
-  . "$VENV_STATE_FILE"
+  local_name=VENV_ACTIVE_$TTY
+  LOCAL_VENV_ACTIVE=${!local_name}
 }
 
 venv_check_active() {
-  if [[ "$VENV_ACTIVE" == "$TTY" ]]
+  if [[ "$LOCAL_VENV_ACTIVE" ]]
   then
     echo "A python environment is already active. Cannot $TASK_SUBCOMMAND."
     exit 1
@@ -83,11 +76,11 @@ venv_init() {
   echo Initializing python $ARG_VERSION environment in $ENV_DIR
 
   mkdir -p "$ENV_DIR"
-  cd "$ENV_DIR"
+  cd "$ENV_DIR" || exit
 
   python3 -m venv "$ENV_DIR"
 
-  echo "VENV_$ARG_NAME=\"$ENV_DIR\"" >> "$VENV_STATE_FILE"
+  persist_module_var "VENV_$ARG_NAME" "$ENV_DIR"
 }
 
 venv_enable() {
@@ -102,37 +95,40 @@ venv_enable() {
   echo Enabling python environment $ARG_NAME
 
   _tmverbose_echo "Saving current env state..."
-  echo "PS1_$TTY=\"$PS1\"" >> "$VENV_STATE_FILE"
-  echo "PATH_$TTY=\"$PATH\"" >> "$VENV_STATE_FILE"
-  echo "VIRTUAL_ENV_$TTY=\"$VIRTUAL_ENV\"" >> "$VENV_STATE_FILE"
+  persist_module_var "PS1_$TTY" "$PS1"
+  persist_module_var "PATH_$TTY" "$PATH"
+  persist_module_var "VIRTUAL_ENV_$TTY" "$VIRTUAL_ENV"
 
   _tmverbose_echo "Setting new env state..."
-  echo "PS1_$TTY=\"$PS1\"" >> "$VENV_STATE_FILE"
+
   export_var "PS1" "(py-$ARG_NAME)-$PS1"
   source $ENV_DIR/bin/activate
   export_var "VIRTUAL_ENV" "$ENV_DIR/modules"
   export_var "PATH" "$PATH:$ENV_DIR/python/bin:$ENV_DIR/modules/bin"
-  echo "VENV_ACTIVE=$TTY" >> $VENV_STATE_FILE
+  persist_module_var "VENV_ACTIVE_$TTY" "TRUE"
 
   set_trap "cd $RUNNING_DIR; task venv disable ;"
 }
 
 venv_disable() {
-  if [[ -n "$VENV_ACTIVE" ]]
+  if [[ -n "$LOCAL_VENV_ACTIVE" ]]
   then
     echo Disabling python environment...
 
     _tmverbose_echo "Removing saved variables..."
-    awk "/^(PS1|PATH|VIRTUAL_ENV)_$TTY/ { next } /^VENV_ACTIVE=${TTY}$/ { next } { print }" "$VENV_STATE_FILE" > "$VENV_STATE_FILE.tmp"
-    mv "$VENV_STATE_FILE"{.tmp,}
+    remove_module_var "VENV_ACTIVE_$TTY"
 
     _tmverbose_echo "Reseting env state..."
-    val=PS1_$TTY
-    export_var "PS1" "${!val}"
-    val=PATH_$TTY
-    export_var "PATH" "${!val}"
-    val=VIRTUAL_ENV_$TTY
-    export_var "VIRTUAL_ENV" "${!val}"
+    ps1_var=PS1_$TTY
+    path_var=PATH_$TTY
+    ve_var=VIRTUAL_ENV_$TTY
+
+    export_var "PS1" "${!ps1_var}"
+    export_var "PATH" "${!path_var}"
+    export_var "VIRTUAL_ENV" "${!ve_var}"
+    remove_module_var "$ps1_var"
+    remove_module_var "$path_var"
+    remove_module_var "$ve_var"
 
     unset_trap
   else
@@ -158,12 +154,11 @@ venv_destroy() {
   fi
 
   echo Removing $ARG_NAME record...
-  awk "/^VENV_$ARG_NAME=/ { next } { print }" "$VENV_STATE_FILE" >> "$VENV_STATE_FILE.tmp"
-  mv "$VENV_STATE_FILE"{.tmp,}
+  remove_module_var "VENV_$ARG_NAME"
 }
 
 venv_list() {
-  grep "VENV_" "$VENV_STATE_FILE" | sed 's/VENV_\(.*\)=.*/\1/'
+  grep "VENV_" "$MODULE_STATE_FILE" | sed 's/VENV_\(.*\)=.*/\1/'
 }
 
 
