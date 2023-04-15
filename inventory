@@ -7,9 +7,9 @@ DRIVER_DIR = drivers
 
 ===== Included Modules =====
 
-module-venv = venv-module.sh.disabled
-module-gonv = gonv-module.sh.disabled
-module-todo = todo-module.sh.disabled
+module-venv = venv-module.sh
+module-gonv = gonv-module.sh
+module-todo = todo-module.sh
 
 ====== Included Drivers =====
 
