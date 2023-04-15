@@ -125,15 +125,12 @@ gonv_enable() {
 
   _tmverbose_echo "Saving current env variables..."
 
-  eval "PS1_$TTY=$PS1"
-  eval "PATH_$TTY=$PATH"
-  eval "GOPATH_$TTY=$GOPATH"
-
-  hold_module_var "PS1_$TTY"
-  hold_module_var "PATH_$TTY"
-  hold_module_var "GOPATH_$TTY"
+  persist_module_var "PS1_$TTY" "$PS1"
+  persist_module_var "PATH_$TTY" "$PATH"
+  persist_module_var "GOPATH_$TTY" "$GOPATH"
 
   _tmverbose_echo "Updating env variables..."
+
   export_var "PS1" "(go-$ARG_NAME)-$PS1"
   export_var "GOPATH" "$ENV_DIR/modules"
   export_var "PATH" "$PATH:$ENV_DIR/go/bin:$ENV_DIR/modules/bin"
@@ -150,9 +147,16 @@ gonv_disable() {
     remove_module_var "GONV_ACTIVE_$TTY"
 
     _tmverbose_echo "Extracting saved env variables..."
-    release_module_var "PS1_$TTY"
-    release_module_var "PATH_$TTY"
-    release_module_var "GOPATH_$TTY"
+    ps1_var=PS1_$TTY
+    gopath_var=GOPATH_$TTY
+    path_var=PATH_$TTY
+
+    export_var "PS1" "${!ps1_var}"
+    export_var "GOPATH" "${!gopath_var}"
+    export_var "PATH" "${!path_var}"
+    remove_module_var "$ps1_var"
+    remove_module_var "$gopath_var"
+    remove_module_var "$path_var"
 
     unset_trap
   else
