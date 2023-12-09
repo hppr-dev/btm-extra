@@ -136,7 +136,7 @@ gonv_enable() {
   _tmverbose_echo "Updating env variables..."
   export_var "PS1" "(go-$ARG_NAME)-$PS1"
   export_var "GOPATH" "$ENV_DIR/modules"
-  export_var "PATH" "$PATH:$ENV_DIR/go/bin:$ENV_DIR/modules/bin"
+  export_var "PATH" "$ENV_DIR/go/bin:$ENV_DIR/modules/bin:$PATH"
   echo "GONV_ACTIVE=$TTY" >> $GONV_STATE_FILE
 
   set_trap "cd $RUNNING_DIR; task gonv disable ;"
